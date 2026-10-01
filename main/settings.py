@@ -9,11 +9,13 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -38,9 +40,21 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'silk',
-    'assets',
+    'apps.users.apps.UsersConfig',
+    'apps.app_settings.apps.AppSettingsConfig',
+    'apps.lookup.apps.LookupConfig',
+    'apps.category.apps.CategoryConfig',
+    'apps.home_assets.apps.HomeAssetsConfig',
+    'apps.stickers.apps.StickersConfig',
+    'apps.effects.apps.EffectsConfig',
+    'apps.slides.apps.SlidesConfig',
+    'apps.fonts.apps.FontsConfig',
+    'apps.utils.apps.UtilsConfig',
 ]
+
+AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     'silk.middleware.SilkyMiddleware',
@@ -71,19 +85,20 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'main.wsgi.application'
+ASGI_APPLICATION = 'main.asgi.application'
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'verse',
-        'USER': 'postgres',
-        'PASSWORD': 'saadabbas',
-        'HOST': 'localhost',  
-        'PORT': '5432',       
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST" ),
+        "PORT": os.getenv("DB_PORT"),
     }
 }
 

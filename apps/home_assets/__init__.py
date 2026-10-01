@@ -1,0 +1,1 @@
+"""Home frame and related asset models."""

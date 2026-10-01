@@ -1,0 +1,1 @@
+"""Shared lookup and tag models."""
