@@ -70,14 +70,26 @@ class Category(models.Model):
         if self.parent_id:
             if self.parent_id == self.pk:
                 errors["parent"] = "A category cannot be its own parent."
+            elif self.pk and self.children.exists():
+                errors["parent"] = "A category with children cannot become a child."
             elif self.parent.parent_id:
                 errors["parent"] = "Categories may have only a parent and one child level."
             elif self.parent.app_id != self.app_id:
                 errors["parent"] = "A child and its parent must belong to the same app."
+        if self.pk and self.children.exclude(app_id=self.app_id).exists():
+            errors["app"] = "A parent and its children must belong to the same app."
+        for field in ("orientation", "status", "variant"):
+            lookup = getattr(self, field, None)
+            if lookup is not None and not lookup.is_active:
+                errors[field] = "Inactive lookup values cannot be used."
         if self.tag_id and self.tag.tag_type != Tag.TagType.AVAILABILITY:
             errors["tag"] = "Category tag must have the availability type."
+        elif self.tag_id and not self.tag.is_active:
+            errors["tag"] = "Inactive lookup values cannot be used."
         if self.section_id and self.section.tag_type != Tag.TagType.LISTING:
             errors["section"] = "Category section must have the listing type."
+        elif self.section_id and not self.section.is_active:
+            errors["section"] = "Inactive lookup values cannot be used."
         if errors:
             raise ValidationError(errors)
 

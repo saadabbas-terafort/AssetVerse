@@ -17,7 +17,13 @@ class Font(models.Model):
         validators=(FileExtensionValidator(allowed_extensions=("ttf",)),),
     )
     status = models.ForeignKey("lookup.RecordStatus", on_delete=models.PROTECT, related_name="fonts")
-    tags = models.ManyToManyField("lookup.Tag", blank=True, related_name="fonts", db_table="fonts_font_tags")
+    tags = models.ManyToManyField(
+        "lookup.Tag",
+        blank=True,
+        related_name="fonts",
+        through="FontTag",
+        through_fields=("font", "tag"),
+    )
     sort_order = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -34,3 +40,12 @@ class Font(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class FontTag(models.Model):
+    pk = models.CompositePrimaryKey("font_id", "tag_id")
+    font = models.ForeignKey(Font, on_delete=models.CASCADE, related_name="+")
+    tag = models.ForeignKey("lookup.Tag", on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        db_table = "fonts_font_tags"

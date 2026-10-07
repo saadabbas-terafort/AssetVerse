@@ -12,7 +12,13 @@ class Sticker(models.Model):
     category = models.ForeignKey("category.Category", on_delete=models.CASCADE, related_name="stickers")
     image = models.ImageField(max_length=500, upload_to=sticker_upload_path)
     status = models.ForeignKey("lookup.RecordStatus", on_delete=models.PROTECT, related_name="stickers")
-    tags = models.ManyToManyField("lookup.Tag", blank=True, related_name="stickers", db_table="stickers_sticker_tags")
+    tags = models.ManyToManyField(
+        "lookup.Tag",
+        blank=True,
+        related_name="stickers",
+        through="StickerTag",
+        through_fields=("sticker", "tag"),
+    )
     sort_order = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -29,3 +35,12 @@ class Sticker(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class StickerTag(models.Model):
+    pk = models.CompositePrimaryKey("sticker_id", "tag_id")
+    sticker = models.ForeignKey(Sticker, on_delete=models.CASCADE, related_name="+")
+    tag = models.ForeignKey("lookup.Tag", on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        db_table = "stickers_sticker_tags"

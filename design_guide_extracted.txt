@@ -1,0 +1,1233 @@
+TERAFORT   ·   ASSETVERSE
+Backend
+Design Guide
+Architecture, request flows, and the database
+behind the multi-app asset catalog.
+A working spec for engineers who will design
+and build this API themselves.
+01
+Flows
+Request path, device login, and how an editor publishes.
+02
+ERD
+How apps, categories, lookups, and assets relate.
+03
+Database
+Tables, columns, keys, indexes, and delete rules.
+04
+API
+Paths, headers, filters, and the JSON envelope.
+05
+Build plan
+Eight phases, each with a check before the next.
+Django 5.2   ·   Django REST Framework   ·   PostgreSQL   ·   S3
+Python 3.11   ·   Gunicorn   ·   Unfold admin
+For junior backend engineers
+30 September 2026
+
+
+ASSETVERSE
+Backend Design Guide
+Contents
+Read the guide in order the first time. After that, use the contents and the PDF bookmarks to jump to the flow, the ERD, or
+the table you are building.
+01    How to use this guide
+2
+02    The product
+3
+03    Architecture
+4
+04    Code layout
+4
+05    Configuration and startup
+5
+06    Request flow
+5
+07    Access model
+6
+08    Device login
+7
+09    App scoping
+8
+10    Content rules
+8
+11    Publishing flow
+10
+12    Relationship map
+11
+13    Database diagrams
+12
+14    API catalog
+15
+15    File storage
+16
+16    Seed data
+16
+17    Implementation plan
+17
+18    Done checklist
+18
+What “done” means
+The same tables, relationships, and delete rules exist. The same public and admin routes answer with the same headers, filters, and
+JSON envelope. Bad category and asset writes are rejected for the same reasons. A fresh database can be seeded, and a staff user can
+be created from environment variables.
+How to use this guide
+This is the design of the AssetVerse backend. It is the spec you are matching. Build the service yourself from these flows,
+diagrams, and rules. When your result and this guide disagree, change your result.
+Work in this order
+ · Product and architecture. Learn what the service is for and which process owns which job.
+· Flows. Follow one public read, one device login, and one publish action from the client to the database.
+· Relationship map and database diagrams. Draw the tables before you write endpoints.
+· API catalog. Match paths, headers, query parameters, and field names. Mobile clients already depend on them.
+· Implementation plan. Build one phase at a time and tick the checklist at the end.
+Design guide for junior engineers
+2
+
+
+ASSETVERSE
+Backend Design Guide
+How to use the existing repository
+The repository is a reference implementation, not a file to copy. Use it when a rule in this guide is ambiguous. Do not start by cloning
+view files into a new project. Start from the diagrams.
+The product
+AssetVerse is the content API for TeraFort photo and video editor apps. One backend serves more than one mobile app. Each
+app is a row in App Setting, identified by a slug. The seeded app is ai_photo_infinity (AI Photo Editor Infinity).
+Editors publish the catalog. The phone reads it. The phone does not create frames, stickers, or categories.
+What the home screen is made of
+App Setting
+ai_photo_infinity
+Parent category
+parent is empty
+Child category
+variant = frame
+Frames
+only on this child
+The same child slot is reused for stickers, effects, slides, and fonts. One child holds one variant.
+A parent category is a block on the home screen: title, cover, orientation, and an optional listing section. A child category is a
+collection of one asset kind. Assets hang off the child, never off the parent.
+Asset kinds
+ Kind
+Table
+What the client receives
+Frame
+home_assets_frame
+Layout ratios, constraints, and layered images
+Sticker
+stickers_sticker
+One image, plus tags
+Effect
+effects_effect
+A cover image, a file, a type, and a short effect name
+Slide
+slides_slide
+A cover image and a slide type (pro, home, save)
+Font
+fonts_font
+A .ttf file, plus tags
+Lookup codes also exist for video, story, reels, audio, and shape. A category may use those variants. Those five codes do not have asset tables yet.
+Design guide for junior engineers
+3
+
+
+ASSETVERSE
+Backend Design Guide
+Architecture
+The API process is a Django application behind Gunicorn. PostgreSQL holds the rows. Media files go to Amazon S3 when a
+bucket name is configured, and to a local media folder when it is not.
+CLIENTS
+SERVICE
+DATA
+Mobile apps
+Catalog reads, device login
+Staff browser
+Unfold admin and admin API
+GitHub Actions
+Manual deploy to EC2
+PostgreSQL
+All domain tables
+S3 or media/
+Images, fonts, effect files
+WhiteNoise
+Admin static files
+AssetVerse API
+Django 5.2
+Django REST Framework
+Gunicorn · 3 workers
+Container port 8000
+Host port 8006
+Processes
+ Piece
+Role
+Mobile app
+Reads the public catalog. Registers a device and receives a public token.
+Staff browser
+Unfold admin at /admin/, plus the JSON admin API for the same tables.
+Django API
+Auth, filtering, validation, file paths, and the JSON envelope.
+PostgreSQL
+All domain rows. The database is not started by docker-compose.
+S3 or media/
+Images, effect files, and font files. URLs are public, not signed.
+GitHub Actions
+Manual deploy over SSH to EC2. Discord message on start, success, and failure.
+Code layout
+Keep one Django app per area. Each app owns its models, serializers, views, urls, admin, and migrations. Shared response and
+permission code stays in apps/utils.
+Path
+Owns
+server/
+Settings, root URLs, health check, WSGI
+apps/users/
+Staff user, device user, public token, device login
+apps/app_settings/
+One row per mobile app (slug and label)
+apps/lookup/
+Shared code/label lists and tags
+apps/category/
+Home categories and the app-header mixin
+apps/home_assets/
+Frames, constraints, and frame layer images
+apps/stickers/
+Stickers
+apps/effects/
+Effects
+apps/slides/
+Slides
+apps/fonts/
+Fonts
+apps/utils/
+Envelope, API key, upload paths, base viewset
+Design guide for junior engineers
+4
+
+
+ASSETVERSE
+Backend Design Guide
+Path
+Owns
+apps/management/commands/
+seed_data and ensure_superuser
+seeds/
+JSON for app settings and lookups
+Repeated asset shape
+Stickers, effects, slides, and fonts are the same idea: a child category, a status, a sort order, and a file. Frames add constraints and a
+second table of layer images. Build frames once, then repeat the smaller pattern.
+Configuration and startup
+Settings come from environment variables. An empty PUBLIC_API_KEY rejects every public catalog call, because the
+permission compares the header with that value.
+Variable
+Used for
+SECRET_KEY, DEBUG
+Django core
+PUBLIC_API_KEY
+X-Api-Key check on public catalog routes
+ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS
+Host and admin form trust
+DB_NAME, DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD
+PostgreSQL
+ADMIN_EMAIL, ADMIN_PASSWORD
+First staff superuser
+AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+S3 credentials
+AWS_S3_REGION_NAME, AWS_STORAGE_BUCKET_NAME
+S3 location. Empty bucket keeps local media.
+AWS_S3_CUSTOM_DOMAIN
+Public file host, without a scheme
+Container start, in this order
+ · Apply migrations.
+· Create the superuser when ADMIN_EMAIL and ADMIN_PASSWORD are set and that email does not exist yet.
+· Collect static files for the admin.
+· Run Gunicorn on 0.0.0.0:8000 with 3 workers and a 120 second timeout.
+Compose publishes host port 8006 to container port 8000. The image is Python 3.11. CORS allows all origins and adds the
+headers X-App-Name and X-Api-Key. Domain primary keys are UUIDs. Time zone is UTC.
+After migrate, load seeds with python manage.py seed_data. The command is safe to run again: it updates rows matched by code, or by slug for app
+settings.
+Request flow
+Every JSON endpoint returns one envelope. Health uses the same shape and does not touch the database.
+{
+"status": 200,
+"data": {},
+"message": "Success"
+}
+Design guide for junior engineers
+5
+
+
+ASSETVERSE
+Backend Design Guide
+1
+Client
+Headers and body
+2
+Middleware
+CORS, then Django
+3
+Router
+URL to a view
+4
+Auth
+Token, or skip
+5
+Permission
+Key or staff
+6
+Query
+App and status
+7
+Serializer
+Codes and files
+8
+Envelope
+status, data, message
+· CORS, then the Django stack. Security, WhiteNoise, session, common, CSRF, auth, messages, clickjacking.
+· Authentication is optional per view. The defaults try a staff DRF token, a session cookie, then a public device token.
+Public catalog views clear that list.
+· Permission runs next. The project default is “authenticated”. Public catalog views replace it with the API key. Admin
+views require a staff user.
+· The queryset hides other apps. Public lists also keep only rows whose status code is active.
+· Serializers speak in codes. Clients send portrait or active, not lookup UUIDs. Category and asset ids stay UUIDs.
+· Errors use the same envelope. The message is the validation detail. data is an empty object.
+Lists are not paged
+The base viewset can wrap a page, and no pagination class is configured. A list response puts the whole array in data. Keep it that way
+until a client asks for pages.
+Access model
+Public catalog
+X-Api-Key  +  X-App-Name
+GET active rows
+Device login
+X-App-Name  +  device_id
+Rotate public token
+Lookup bundle
+Token, session, or PublicToken
+GET /api/lookups/
+Admin API
+Staff  ·  Token or session
+Full CRUD
+Caller
+How they prove it
+What they can do
+Mobile catalog
+X-Api-Key and X-App-Name
+GET active rows for that app
+Device login
+X-App-Name only. Body has device_id.
+Create or reuse the device user and rotate its token
+Lookup bundle
+Staff token, staff session, or PublicToken
+GET /api/lookups/ — every active lookup
+Admin API
+Staff user. DRF Token or admin session.
+Create, update, and delete any status
+Design guide for junior engineers
+6
+
+
+ASSETVERSE
+Backend Design Guide
+Caller
+How they prove it
+What they can do
+Django Admin
+Staff session at /admin/
+Publish the same tables in the browser
+A device user is authenticated for the lookup bundle, and it is not a staff user. PublicToken cannot call admin routes. There is
+no login route that issues a staff DRF token. Create one with python manage.py drf_create_token <email> and send
+Authorization: Token <key>.
+Device login
+POST /api/users/auth/ is open to anyone who names a real, active app. Both a first registration and a later login return
+HTTP 200. The message text is what changes.
+1
+Client
+POST /api/users/auth/
+2
+Validate app
+Active App Setting slug
+3
+Upsert device
+Unique device_id + app_name
+4
+Rotate token
+Delete old, insert new key
+5
+Respond 200
+data.token and data.user
+Fail closed
+·  Missing X-App-Name
+·  Unknown or inactive slug
+·  Empty device_id
+·  Inactive user, later call
+·  Token app differs from header
+·  Catalog still needs API key
+Token rules
+ · The key is 32 hex characters from a UUID. The column allows 40.
+· One device user has one token. Login deletes the previous row, then inserts the new key.
+· A later call with Authorization: PublicToken <key> also sends X-App-Name.
+· Reject the token when the user is inactive, or when the stored app name differs from the header.
+· Public catalog routes ignore this token. They require the API key.
+app_name is a string, not a foreign key
+Public User stores the app slug in a char field. The unique key is (device_id, app_name). The header is still checked against App
+Setting. Renaming a slug does not rewrite old device rows, so those tokens stop matching until the stored app name matches the
+header.
+Sample
+POST /api/users/auth/
+X-App-Name: ai_photo_infinity
+Content-Type: application/json
+{ "device_id": "phone-123" }
+Design guide for junior engineers
+7
+
+
+ASSETVERSE
+Backend Design Guide
+{
+"status": 200,
+"data": {
+"token": "<32 hex characters>",
+"user": {
+"id": "<uuid>",
+"device_id": "phone-123",
+"app_name": "ai_photo_infinity",
+"is_active": true
+}
+},
+"message": "User registered successfully"
+}
+App scoping
+X-App-Name
+must match an active slug
+App Setting
+slug is unique
+Home Category
+stores app_id
+Asset row
+no app column
+Public filters follow
+this chain. Assets
+inherit the app from
+their category.
+· Every public catalog view reads X-App-Name and requires an active App Setting with that slug.
+· Categories store app_id. Assets do not. An asset belongs to an app because its category does.
+· Public category queries filter app__slug and status__code = active.
+· Public asset queries filter category__app__slug and the asset’s own active status.
+· An asset list does not also require the category’s status to be active.
+· Deleting an app setting is blocked while any category points at it.
+Content rules
+Enforce these rules in model validation and again in the write serializer. Admin forms and the JSON API must both fail the
+same way.
+Design guide for junior engineers
+8
+
+
+ASSETVERSE
+Backend Design Guide
+Parent category
+parent is null · one app
+Child · frame
+Frames, constraints, layers
+Child · sticker
+Sticker images
+Child · effect
+Cover, file, effect type
+Child · font / slide
+ttf file, or slide cover
+A child cannot become a parent. Assets attach only to a child. The variant chooses the table.
+Rule
+What to reject
+Depth is two
+A parent that itself has a parent. A category that is its own parent.
+Same app
+A child whose parent belongs to a different app.
+Assets sit on children
+A frame, sticker, effect, slide, or font whose category is a root.
+Variant must match
+A frame on a sticker category, a font on a slide category, and the same for the other kinds.
+Availability tag
+A category tag whose type is anything other than availability.
+Listing section
+A section whose type is anything other than listing. Null is allowed.
+Active lookups
+A code that is missing or inactive. Writes look up by code.
+Font file
+Any font upload whose extension is not ttf.
+sort_order is the display order on categories and assets. Public lists order by sort_order, then title. api_option is stored and
+returned as plain text. The server does not use it to pick a table. The variant code does that.
+Variant codes that gate writes
+ Asset
+Required category variant
+Constant
+Frame
+frame
+FRAME_VARIANT_CODE
+Sticker
+sticker
+STICKER_VARIANT_CODE
+Effect
+effect
+EFFECT_VARIANT_CODE
+Font
+font
+FONT_VARIANT_CODE
+Slide
+slide
+SLIDE_VARIANT_CODE
+Design guide for junior engineers
+9
+
+
+ASSETVERSE
+Backend Design Guide
+Publishing flow
+Nothing is hard-coded into the home screen. An editor seeds lookups, builds the category tree, attaches assets, and marks
+rows active. The phone then reads.
+1
+Seed
+Lookups and the app row
+2
+Root category
+Cover, orientation, tag
+3
+Child category
+Pick one variant
+4
+Assets
+Files, tags, constraints
+5
+Mark active
+status code = active
+6
+Phone reads
+API key + app header
+Frame write details the other assets do not share
+ · The frame body may include a constraints array (value_1 through value_4, plus sort_order). The server stores the
+numbers and does not interpret them.
+· On update, a present constraints array deletes the old rows and inserts the new ones. An omitted array leaves the old
+rows in place.
+· Layer images are not inside the frame body. They are rows on /api/home-assets/admin/frame-assets/, each pointing at a
+frame and a frame-key code.
+· Tags on frames, stickers, effects, and fonts are a list of tag codes. Any active tag is allowed. Omitted tags on update stay
+as they are. An empty list clears them.
+· Slides have no tags.
+Design guide for junior engineers
+10
+
+
+ASSETVERSE
+Backend Design Guide
+Relationship map
+Read the bands from top to bottom. Accounts are separate from the catalog. The catalog hangs off App Setting through
+Home Category. Every asset hangs off a child category.
+ACCOUNTS
+users_user
+email login · staff
+users_publicuser
+device_id + app_name
+users_publicusertoken
+one key per device
+1 : 1
+No link to device users
+CATALOG
+app_settings
+one row per mobile app
+category_homecategory
+parent and child
+lookup_*  and  tag
+PROTECT on every FK
+1 : *
+* : 1
+ASSETS
+ Each asset is many-to-one with a child category. Deleting the category cascades.
+frame
+constraints, layers
+sticker
+image and tags
+effect
+cover and file
+slide
+cover and type
+font
+ttf and tags
+Teal links are ownership. Amber links are lookups, and those foreign keys use PROTECT. 1 : * is one-to-many. * : 1 is many-to-one.
+Relationship checklist
+ From
+To
+Kind
+On delete
+Public User Token
+Public User
+1 : 1
+CASCADE
+Home Category
+App Setting
+many : 1
+PROTECT
+Home Category
+Home Category (parent)
+many : 1, null
+CASCADE
+Home Category
+Orientation, Status, Variant
+many : 1
+PROTECT
+Home Category.tag
+Tag (availability)
+many : 1
+PROTECT
+Home Category.section
+Tag (listing)
+many : 1, null
+PROTECT
+Frame, Sticker, Effect, Slide, Font
+Home Category
+many : 1
+CASCADE
+Frame
+Frame Type, Status
+many : 1
+PROTECT
+Frame Constraint
+Frame
+many : 1
+CASCADE
+Frame Asset
+Frame
+many : 1
+CASCADE
+Frame Asset
+Frame Key, Status
+many : 1
+PROTECT
+Effect
+Effect Type, Status
+many : 1
+PROTECT
+Design guide for junior engineers
+11
+
+
+ASSETVERSE
+Backend Design Guide
+From
+To
+Kind
+On delete
+Slide
+Slide Type, Status
+many : 1
+PROTECT
+Sticker, Font
+Status
+many : 1
+PROTECT
+Frame, Sticker, Effect, Font
+Tag
+many : many
+CASCADE join rows
+Join tables created by the many-to-many fields: home_assets_frame_tags, stickers_sticker_tags, effects_effect_tags, fonts_font_tags. Each has the two
+foreign keys only.
+Database diagrams
+Each card is a PostgreSQL table. PK is the primary key, FK is a foreign key, UQ is a unique constraint. Django also creates
+permission, session, migration, and content-type tables. Leave those to Django migrations. Staff API tokens live in
+authtoken_token (key, user_id, created).
+Accounts and apps
+users_user
+PK
+id
+uuid
+UQ
+email
+varchar
+password
+hash
+first_name, last_name
+varchar
+is_staff, is_active
+bool
+is_superuser
+bool
+last_login, date_joined
+timestamptz
+users_publicuser
+PK
+id
+uuid
+UQ
+device_id + app_name
+pair
+device_id
+varchar(255)
+app_name
+slug string
+is_active
+bool
+created_at, updated_at
+timestamptz
+users_publicusertoken
+PK
+key
+varchar(40)
+FK
+user_id
+CASCADE · unique
+created
+timestamptz
+app_settings_appsetting
+PK
+id
+uuid
+UQ
+slug
+varchar(100)
+label
+varchar(150)
+is_active
+bool
+sort_order
+smallint
+created_at, updated_at
+timestamptz
+1 : 1
+Staff groups use Django’s permission tables. Device users do not.
+Indexes: publicuser_app_active_idx on (app_name, is_active). Unique constraint unique_public_user_device_per_app on (device_id,
+app_name).
+Lookup tables
+Eight tables share one column set. Tag adds two columns. Seed rows are listed later. Order every lookup by sort_order, then
+label.
+Design guide for junior engineers
+12
+
+
+ASSETVERSE
+Backend Design Guide
+lookup_<name>   shared columns
+PK
+id
+uuid
+UQ
+code
+slug(50)
+label
+varchar(100)
+sort_order
+smallint
+is_active
+bool
+created_at, updated_at
+timestamptz
+lookup_tag   adds
+tag_type
+6 choices
+icon
+image, null
+IX
+type, active, sort
+index
+Tables using only the shared columns
+orientation
+recordstatus
+assetvariant
+framekey
+frametype
+effecttype
+slidetype
+screen · listing · availability · variant · hashtag · locale
+Table
+Extra meaning
+lookup_orientation
+portrait, landscape. Required on every category.
+lookup_recordstatus
+active and inactive. Public queries keep active only.
+lookup_assetvariant
+Decides which asset table a child category may hold.
+lookup_tag
+Typed labels. Indexed by (tag_type, is_active, sort_order).
+lookup_framekey
+Layer name for a frame image: cover, masks, bg, and the rest.
+lookup_frametype
+frame, blend, effect, pip.
+lookup_effecttype
+filter, mask, overlay, pixel.
+lookup_slidetype
+pro, home, save.
+Home category
+category_homecategory
+PK
+id
+uuid
+FK
+app_id
+uuid
+App Setting · PROTECT
+title
+varchar(255)
+actionbar
+varchar(255)
+blank allowed
+cover_image
+path
+required
+FK
+parent_id
+uuid
+self · CASCADE · null · depth 2
+FK
+orientation_id
+uuid
+Orientation · PROTECT
+FK
+tag_id
+uuid
+Tag availability · PROTECT
+FK
+section_id
+uuid
+Tag listing · PROTECT · null
+FK
+status_id
+uuid
+Record Status · PROTECT
+FK
+variant_id
+uuid
+Asset Variant · PROTECT
+api_option
+varchar(100)
+stored text, not a route
+sort_order
+int
+display order
+created_at, updated_at
+timestamptz
+Indexes: homecat_app_section_status_idx (app, section, status, sort_order), homecat_app_parent_idx (app, parent),
+homecat_app_variant_status_idx (app, variant, status). Order by sort_order, title.
+Design guide for junior engineers
+13
+
+
+ASSETVERSE
+Backend Design Guide
+Frames
+home_assets_frame
+PK
+id
+uuid
+title
+varchar
+FK
+category_id
+uuid
+child · frame · CASCADE
+FK
+frame_type_id
+uuid
+Frame Type · PROTECT
+editor
+varchar
+default frames
+ratio_width
+decimal(8,2)
+ratio_height
+decimal(8,2)
+FK
+status_id
+uuid
+Record Status · PROTECT
+image_picker
+bool
+default true
+sort_order
+int
+M2M
+tags
+frame_tags
+timestamps
+timestamptz
+home_assets_frameconstraint
+PK
+id
+uuid
+FK
+frame_id
+uuid
+CASCADE · 1 : *
+value_1 … 4
+dec(8,4)
+not interpreted
+sort_order
+int
+timestamps
+timestamptz
+home_assets_frameasset
+PK
+id
+uuid
+FK
+frame_id
+uuid
+CASCADE · 1 : *
+FK
+key_id
+uuid
+Frame Key · PROTECT
+image
+path
+FK
+status_id
+uuid
+PROTECT
+sort_order
+int
+Constraints and layer images cascade when the frame is deleted.
+Indexes: frame_cat_status_sort_idx (category, status, sort_order) and frameasset_frame_status_idx (frame, status, sort_order). Constraints and
+assets order by sort_order, created_at. Frames order by sort_order, title.
+Stickers, effects, slides, fonts
+stickers_sticker
+PK
+id
+uuid
+title
+varchar(255)
+FK
+category_id
+child sticker
+image
+path
+FK
+status_id
+PROTECT
+M2M
+tags
+sticker_tags
+sort_order + times
+effects_effect
+PK
+id
+uuid
+title
+varchar(255)
+effect
+varchar(100)
+FK
+category_id
+child effect
+FK
+effect_type_id
+PROTECT
+cover, file
+paths
+FK
+status_id
+PROTECT
+M2M
+tags
+effect_tags
+sort_order + times
+slides_slide
+PK
+id
+uuid
+title
+varchar(255)
+FK
+category_id
+child slide
+FK
+slide_type_id
+PROTECT
+cover
+path
+FK
+status_id
+PROTECT
+sort_order + times
+no tags
+fonts_font
+PK
+id
+uuid
+title
+varchar(255)
+FK
+category_id
+child font
+file
+ttf only
+FK
+status_id
+PROTECT
+M2M
+tags
+font_tags
+sort_order + times
+Indexes on (category, status, sort_order) for sticker, effect, slide, and font. Effect also indexes (effect_type, status). Slide also indexes
+(slide_type, status, sort_order). All four order by sort_order, title.
+Design guide for junior engineers
+14
+
+
+ASSETVERSE
+Backend Design Guide
+API catalog
+Trailing slashes match Django’s defaults. Admin routes accept GET, POST, PUT, PATCH, and DELETE. Public routes accept GET,
+HEAD, and OPTIONS. A write to a public route is 405.
+Health and identity
+ Method
+Path
+Access
+Behavior
+GET
+/health/
+None
+Liveness. No database call.
+POST
+/api/users/auth/
+X-App-Name
+Register or log in a device. Rotates the token.
+GET
+/api/lookups/
+Authenticated
+Bundle of every active lookup, tags split by type.
+GET
+/api/lookups/tags/
+API key
+Active tags. Optional ?type=listing and the other
+types.
+GET
+/api/lookups/tags/{id}/
+API key
+One tag.
+The lookup bundle keys are orientations, tags (availability only), sections, screen_tags, variant_tags, hashtags, locales,
+statuses, variants, frame_keys, frame_types, effect_types, and slide_types. Each item is code and label. Tags also include
+tag_type and icon.
+Categories
+ Method
+Path
+Access
+Behavior
+GET
+/api/categories/
+API key + app
+Active categories for the header app.
+GET
+/api/categories/{id}/
+API key + app
+One category, same scope.
+*
+/api/categories/admin/
+Staff
+Full CRUD. Multipart for the cover.
+*
+/api/categories/admin/{id}/
+Staff
+One category, any status.
+Public query parameters
+ · section — listing tag code, such as home_listing.
+· variant — variant code, such as frame.
+· parent_id — children of that UUID. When this is set, the parent flag is ignored.
+· parent=true — roots only. parent=false — children only.
+Admin lists accept app or app_name, and variant. They return every status.
+A category read nests app (slug, label), orientation, tag, section, status, and variant. It also returns app_name, cover_image as
+an absolute URL, parent as a UUID, child_count, is_parent, and is_child. child_count is 0 on a child row. A category write sends
+app as a slug, lookups as codes, and parent as a UUID.
+Frames
+ Method
+Path
+Access
+Behavior
+GET
+/api/home-assets/frames/
+API key + app
+Active frames. Optional ?category=<uuid>.
+GET
+/api/home-assets/frames/{id}/
+API key + app
+One frame, with constraints, assets, and tags.
+*
+/api/home-assets/admin/frames/
+Staff
+CRUD. Nested constraints. Tags as codes.
+*
+/api/home-assets/admin/frame-assets/
+Staff
+CRUD for layer images. Filter ?frame= or ?category=.
+A frame read includes title, category UUID, frame_type, editor, ratio_width, ratio_height, image_picker, status, tags, sort_order,
+constraints, and assets. Each asset includes key, image URL, status, and sort_order. Public frame reads include every related
+asset, including inactive layers. The frame itself must be active.
+Stickers, effects, slides, fonts
+Design guide for junior engineers
+15
+
+
+ASSETVERSE
+Backend Design Guide
+Method
+Path
+Access
+Behavior
+GET
+/api/stickers/
+API key + app
+?category=
+*
+/api/stickers/admin/
+Staff
+?category= and ?app= or ?app_name=
+GET
+/api/effects/
+API key + app
+?category= and ?effect_type=<code>
+*
+/api/effects/admin/
+Staff
+?category= and ?app=
+GET
+/api/slides/
+API key + app
+?category= and ?slide_type=<code>
+*
+/api/slides/admin/
+Staff
+?category=, ?app=, ?slide_type=
+GET
+/api/fonts/
+API key + app
+?category=
+*
+/api/fonts/admin/
+Staff
+?category= and ?app=
+Each public and admin pair also has a /{id}/ detail route. The pattern matches the list above.
+Catalog sample
+GET /api/categories/?parent=true&section=home_listing
+X-Api-Key: <PUBLIC_API_KEY>
+X-App-Name: ai_photo_infinity
+DELETE returns the envelope with an empty data object and a deleted message. Create returns HTTP 201. Update and read
+return HTTP 200.
+File storage
+Models store a path. The storage backend turns that path into a URL. With AWS_STORAGE_BUCKET_NAME set, the backend is S3:
+public objects, no query-string signature, cache for one day. A custom domain, when set, is the public host. Without a bucket,
+files land in the media folder and are served only when DEBUG is on.
+File
+Path pattern
+Tag icon
+tags/{tag_type}/{id}/{filename}
+Category cover
+{app}/home/categories/{id}/cover/{filename}
+Frame layer
+{app}/home/frames/{category_id}/{frame_id}/assets/{asset_id}/{filename}
+Sticker
+{app}/stickers/{category_id}/{sticker_id}/{filename}
+Effect cover
+{app}/effects/{category_id}/{effect_id}/cover/{filename}
+Effect file
+{app}/effects/{category_id}/{effect_id}/file/{filename}
+Slide cover
+slides/{id}/{filename}
+Font
+{app}/fonts/{category_id}/{font_id}/{filename}
+Slide paths are global
+Slide covers are stored under slides/{id}/. The other asset files are prefixed with the app slug. Keep that difference.
+Read serializers return an absolute URL. If the stored URL is already absolute (S3), it is returned as-is.
+Seed data
+Ship these codes. Public filters and mobile clients use the strings, not the labels. Tag types variant, hashtag, and locale are
+valid and simply have no seeded rows, so those bundle lists are empty until an editor adds them.
+List
+Codes
+App
+ai_photo_infinity
+Orientation
+portrait, landscape
+Status
+active, inactive
+Availability tags
+free, premium, rewarded
+Design guide for junior engineers
+16
+
+
+ASSETVERSE
+Backend Design Guide
+List
+Codes
+Listing tags
+home_listing, for_you
+Screen tags
+featured
+Variants
+frame, effect, sticker, video, story, reels, audio, font, shape, slide
+Frame keys
+cover, frame, masks, text, ch, sticker, fg, bg, overlay, clip, blend, user, maskbg, design, icons, image
+Frame types
+frame, blend, effect, pip
+Effect types
+filter, mask, overlay, pixel
+Slide types
+pro, home, save
+The seed command reads every JSON file under seeds/. Each file has an app_label and a models object. The upsert key is
+code, or slug when the model has no code. Missing is_active becomes true.
+Implementation plan
+Build in this order. Finish the check before starting the next phase. Each phase is small enough to review.
+1
+Service shell
+Build. Django project, PostgreSQL settings from the environment, CORS headers, the JSON envelope, and the exception
+handler.
+Check. GET /health/ returns the envelope and does not query the database. A bad request returns the same envelope with
+an empty data object.
+2
+Staff access
+Build. Email user with a UUID primary key, Unfold admin, and the ensure_superuser command.
+Check. ADMIN_EMAIL can open /admin/. A second container start does not create a duplicate user.
+3
+Apps and lookups
+Build. App Setting, the shared lookup columns, Tag with its six types, and seed_data from JSON.
+Check. Running the seed twice updates labels and does not duplicate codes. Inactive lookups exist and are hidden from
+write lookups.
+4
+Categories
+Build. Two-level tree, public GET, admin CRUD, cover upload, and the validation rules.
+Check. A grandchild is rejected. A child cannot move under another app. tag must be availability and section must be listing.
+5
+Frames
+Build. Frame, constraints, frame assets, upload paths, public list, and both admin routes.
+Check. A frame on a root or on a sticker category is rejected. Sending constraints on update replaces the old rows.
+6
+The other assets
+Build. Sticker, effect, slide, and font, each with the matching variant rule. Fonts accept ttf only.
+Check. Each public list requires the API key and the app header, and returns only active rows for that app.
+7
+Device users
+Build. Public user, one-token rotation, PublicToken authentication, and the lookup bundle.
+Check. A second login invalidates the first key. A token issued for app A fails when the header is app B.
+Design guide for junior engineers
+17
+
+
+ASSETVERSE
+Backend Design Guide
+8
+Files and deploy
+Build. S3 when a bucket is set, local media otherwise, Docker start order, and the manual deploy workflow.
+Check. An empty bucket name writes under media/. A bucket name switches the default storage backend to S3.
+Done checklist
+Tick these against a fresh database after seed_data and ensure_superuser.
+ Health returns the envelope and never opens a database connection.
+Staff can publish in /admin/ and through the admin JSON routes.
+Public catalog calls fail without the correct X-Api-Key.
+Public catalog calls fail without a known, active X-App-Name.
+Device login is idempotent per (device_id, app_name) and rotates the token.
+Lookup writes accept codes. Unknown or inactive codes fail.
+Category depth stops at parent and child, inside one app.
+Each asset kind accepts only a child category of its own variant.
+Public lists return active rows for the header app, ordered by sort_order then title.
+Frame constraints replace only when the array is sent. Frame layers have their own route.
+File paths match the storage table, including the global slide prefix.
+Fonts reject anything that is not a ttf.
+Deleting a parent category deletes its children and their assets.
+Deleting an app setting that still has categories is blocked.
+Deleting a lookup that is still referenced is blocked.
+Seed data and the five variant constants use the same code strings.
+Create returns 201. Login, read, and update return 200. Every JSON body has status, data, and message.
+Strings you must not rename
+Status code active. Variant codes frame, sticker, effect, font, slide. Headers X-Api-Key and X-App-Name. Authorization schemes Token
+and PublicToken. App slug ai_photo_infinity. The envelope keys status, data, and message.
+Design guide for junior engineers
+18

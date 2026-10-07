@@ -1,0 +1,71 @@
+{
+"app_label": "assetverse",
+"models": {
+    "app_settings.AppSetting": [
+    {"slug": "ai_photo_infinity", "label": "AI Photo Editor Infinity", "is_active": true, "sort_order": 1}
+    ],
+    "lookup.Orientation": [
+    {"code": "portrait", "label": "Portrait", "sort_order": 1},
+    {"code": "landscape", "label": "Landscape", "sort_order": 2}
+    ],
+    "lookup.RecordStatus": [
+    {"code": "active", "label": "Active", "sort_order": 1},
+    {"code": "inactive", "label": "Inactive", "sort_order": 2}
+    ],
+    "lookup.AssetVariant": [
+    {"code": "frame", "label": "Frame", "sort_order": 1},
+    {"code": "effect", "label": "Effect", "sort_order": 2},
+    {"code": "sticker", "label": "Sticker", "sort_order": 3},
+    {"code": "video", "label": "Video", "sort_order": 4},
+    {"code": "story", "label": "Story", "sort_order": 5},
+    {"code": "reels", "label": "Reels", "sort_order": 6},
+    {"code": "audio", "label": "Audio", "sort_order": 7},
+    {"code": "font", "label": "Font", "sort_order": 8},
+    {"code": "shape", "label": "Shape", "sort_order": 9},
+    {"code": "slide", "label": "Slide", "sort_order": 10}
+    ],
+    "lookup.FrameKey": [
+    {"code": "cover", "label": "Cover", "sort_order": 1},
+    {"code": "frame", "label": "Frame", "sort_order": 2},
+    {"code": "masks", "label": "Masks", "sort_order": 3},
+    {"code": "text", "label": "Text", "sort_order": 4},
+    {"code": "ch", "label": "CH", "sort_order": 5},
+    {"code": "sticker", "label": "Sticker", "sort_order": 6},
+    {"code": "fg", "label": "FG", "sort_order": 7},
+    {"code": "bg", "label": "BG", "sort_order": 8},
+    {"code": "overlay", "label": "Overlay", "sort_order": 9},
+    {"code": "clip", "label": "Clip", "sort_order": 10},
+    {"code": "blend", "label": "Blend", "sort_order": 11},
+    {"code": "user", "label": "User", "sort_order": 12},
+    {"code": "maskbg", "label": "Mask BG", "sort_order": 13},
+    {"code": "design", "label": "Design", "sort_order": 14},
+    {"code": "icons", "label": "Icons", "sort_order": 15},
+    {"code": "image", "label": "Image", "sort_order": 16}
+    ],
+    "lookup.FrameType": [
+    {"code": "frame", "label": "Frame", "sort_order": 1},
+    {"code": "blend", "label": "Blend", "sort_order": 2},
+    {"code": "effect", "label": "Effect", "sort_order": 3},
+    {"code": "pip", "label": "PIP", "sort_order": 4}
+    ],
+    "lookup.EffectType": [
+    {"code": "filter", "label": "Filter", "sort_order": 1},
+    {"code": "mask", "label": "Mask", "sort_order": 2},
+    {"code": "overlay", "label": "Overlay", "sort_order": 3},
+    {"code": "pixel", "label": "Pixel", "sort_order": 4}
+    ],
+    "lookup.SlideType": [
+    {"code": "pro", "label": "Pro", "sort_order": 1},
+    {"code": "home", "label": "Home", "sort_order": 2},
+    {"code": "save", "label": "Save", "sort_order": 3}
+    ],
+    "lookup.Tag": [
+    {"code": "free", "label": "Free", "sort_order": 1, "tag_type": "availability"},
+    {"code": "premium", "label": "Premium", "sort_order": 2, "tag_type": "availability"},
+    {"code": "rewarded", "label": "Rewarded", "sort_order": 3, "tag_type": "availability"},
+    {"code": "home_listing", "label": "Home Listing", "sort_order": 4, "tag_type": "listing"},
+    {"code": "for_you", "label": "For You", "sort_order": 5, "tag_type": "listing"},
+    {"code": "featured", "label": "Featured", "sort_order": 6, "tag_type": "screen"}
+    ]
+}
+}

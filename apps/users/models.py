@@ -61,6 +61,14 @@ class PublicUser(models.Model):
             models.Index(fields=("app_name", "is_active"), name="publicuser_app_active_idx"),
         ]
 
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
 
 class PublicUserToken(models.Model):
     key = models.CharField(max_length=40, primary_key=True)

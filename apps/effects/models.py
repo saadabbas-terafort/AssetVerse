@@ -15,7 +15,13 @@ class Effect(models.Model):
     cover = models.ImageField(max_length=500, upload_to=effect_cover_upload_path)
     file = models.FileField(max_length=500, upload_to=effect_file_upload_path)
     status = models.ForeignKey("lookup.RecordStatus", on_delete=models.PROTECT, related_name="effects")
-    tags = models.ManyToManyField("lookup.Tag", blank=True, related_name="effects", db_table="effects_effect_tags")
+    tags = models.ManyToManyField(
+        "lookup.Tag",
+        blank=True,
+        related_name="effects",
+        through="EffectTag",
+        through_fields=("effect", "tag"),
+    )
     sort_order = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -33,3 +39,12 @@ class Effect(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class EffectTag(models.Model):
+    pk = models.CompositePrimaryKey("effect_id", "tag_id")
+    effect = models.ForeignKey(Effect, on_delete=models.CASCADE, related_name="+")
+    tag = models.ForeignKey("lookup.Tag", on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        db_table = "effects_effect_tags"

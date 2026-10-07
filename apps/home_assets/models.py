@@ -17,7 +17,13 @@ class Frame(models.Model):
     status = models.ForeignKey("lookup.RecordStatus", on_delete=models.PROTECT, related_name="frames")
     image_picker = models.BooleanField(default=True)
     sort_order = models.IntegerField()
-    tags = models.ManyToManyField("lookup.Tag", blank=True, related_name="frames", db_table="home_assets_frame_tags")
+    tags = models.ManyToManyField(
+        "lookup.Tag",
+        blank=True,
+        related_name="frames",
+        through="FrameTag",
+        through_fields=("frame", "tag"),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -67,3 +73,12 @@ class FrameAsset(models.Model):
         indexes = [
             models.Index(fields=("frame", "status", "sort_order"), name="frameasset_frame_status_idx"),
         ]
+
+
+class FrameTag(models.Model):
+    pk = models.CompositePrimaryKey("frame_id", "tag_id")
+    frame = models.ForeignKey(Frame, on_delete=models.CASCADE, related_name="+")
+    tag = models.ForeignKey("lookup.Tag", on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        db_table = "home_assets_frame_tags"
